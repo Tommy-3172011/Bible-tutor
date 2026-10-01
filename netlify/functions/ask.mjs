@@ -1,7 +1,8 @@
 import { getStore } from "@netlify/blobs";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 
 // ===== Settings you can change =====
-const DAILY_FOLLOWUPS = 25;          // follow-up questions per person per day
+const DAILY_FOLLOWUPS = 25;          // follow-up questions per subscriber per day
 const DAILY_NEW_EXPLANATIONS = 100;  // brand-new verse explanations per person per day (saved ones are free)
 const SAME_NETWORK_MULTIPLIER = 6;   // safety cap per internet connection (shared wifi etc.)
 // Gemini 3.1 Flash-Lite. If the first name is not found, the second is tried automatically.
@@ -13,6 +14,15 @@ const NAMES = ["Genesis","Exodus","Leviticus","Numbers","Deuteronomy","Joshua","
 const SYS = "You are a kind Bible teacher. Use short, simple words a teenager would understand. Be accurate and never invent facts; if you are not sure, say so. Only talk about the verse below and the Bible; politely steer other topics back to it. Keep every answer under 90 words.";
 
 export const config = { path: "/api/ask" };
+
+const PID = process.env.FIREBASE_PROJECT_ID;
+const JWKS = createRemoteJWKSet(new URL("https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com"));
+async function uidFrom(req) {
+  const t = (req.headers.get("authorization") || "").replace(/^Bearer /, "");
+  if (!t || !PID) return null;
+  try { const { payload } = await jwtVerify(t, JWKS, { issuer: `https://securetoken.google.com/${PID}`, audience: PID }); return payload.sub; }
+  catch { return null; }
+}
 
 const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json" } });
 const today = () => new Date().toISOString().slice(0, 10);
@@ -65,9 +75,15 @@ export default async (req, context) => {
   if (!process.env.GEMINI_API_KEY) return json({ message: "The server is missing its AI key." }, 500);
   let body; try { body = await req.json(); } catch { return json({ message: "Bad request" }, 400); }
 
+  if (body.action === "config") return json({ apiKey: process.env.FIREBASE_API_KEY, authDomain: process.env.FIREBASE_AUTH_DOMAIN, projectId: process.env.FIREBASE_PROJECT_ID, appId: process.env.FIREBASE_APP_ID, paymentLink: process.env.STRIPE_PAYMENT_LINK, portalLink: process.env.STRIPE_PORTAL_LINK });
+  const uid = await uidFrom(req);
+  if (!uid) return json({ message: "Please log in first." }, 401);
+  const paid = !!(await getStore("subs").get(uid));   // set by the Stripe webhook (trial or active)
+  if (body.action === "status") return json({ active: paid });
+  if (!paid) return json({ message: "Start your free trial to continue.", code: "subscribe" }, 402);
+
   const b = +body.b, c = +body.c, v = +body.v;
   if (![b, c, v].every(Number.isInteger) || b < 0 || b > 65 || c < 0 || c > 149 || v < 1 || v > 176) return json({ message: "Bad verse" }, 400);
-  const vid = String(body.vid || "").replace(/[^a-zA-Z0-9-]/g, "").slice(0, 64) || "none";
   const ip = context.ip || "unknown";
   const key = `${b}-${c}-${v}`;
   const saved = getStore("explanations");
@@ -90,15 +106,16 @@ export default async (req, context) => {
       (chap[v - 2] ? `The verse before it: "${chap[v - 2].text}"\n` : "") + (chap[v] ? `The verse after it: "${chap[v].text}"\n` : "");
 
     if (body.action === "explain") {
-      const quota = await useQuota("new", vid, ip, DAILY_NEW_EXPLANATIONS);
+      const quota = await useQuota("new", uid, ip, DAILY_NEW_EXPLANATIONS);
       if (!quota.ok) return json({ message: "You've reached today's limit for new verses. Try again tomorrow." }, 429);
       const answer = await ai(system, [{ role: "user", content: "Explain this verse in exactly this format:\n\nMeaning: (1 or 2 short sentences)\n\nExample: (one short everyday example)" }]);
       if (answer) await saved.set(key, answer);
       return json({ text: answer });
     }
 
-    const quota = await useQuota("ask", vid, ip, DAILY_FOLLOWUPS);
-    if (!quota.ok) return json({ message: `You've used your ${DAILY_FOLLOWUPS} questions for today. They reset tomorrow.` }, 429);
+    const limit = DAILY_FOLLOWUPS;
+    const quota = await useQuota("ask", uid, ip, limit);
+    if (!quota.ok) return json({ message: `You've used your ${limit} questions for today. They reset tomorrow.` }, 429);
     let h = (Array.isArray(body.history) ? body.history : []).slice(-6)
       .filter(m => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
       .map(m => ({ role: m.role, content: m.content.slice(0, 900) }));
