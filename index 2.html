@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bible Reader</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,600&family=Instrument+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#eef1f4; --paper:#fbfcfd; --ink:#1b2430; --muted:#5d6b7b; --line:#d5dce4;
+  --accent:#1f4e79; --accent-ink:#fff; --hi:#dbe8f5; --panel:#fff;
+  --serif:'Newsreader',Georgia,serif; --sans:'Instrument Sans',system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){--bg:#10161d;--paper:#161e27;--ink:#e6ebf1;--muted:#93a1b1;--line:#2a3542;--accent:#7fb2e5;--accent-ink:#0d1620;--hi:#22354a;--panel:#1b2530}
+}
+:root[data-theme="dark"]{--bg:#10161d;--paper:#161e27;--ink:#e6ebf1;--muted:#93a1b1;--line:#2a3542;--accent:#7fb2e5;--accent-ink:#0d1620;--hi:#22354a;--panel:#1b2530}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px)}
+header{display:flex;align-items:center;gap:.75rem;padding:.6rem 1rem;background:var(--paper);border-bottom:1px solid var(--line)}
+header h1{font:600 1.15rem var(--serif);margin:0;flex:1}
+button{font:inherit;color:inherit;background:none;border:1px solid var(--line);border-radius:6px;padding:.4rem .75rem;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button:focus-visible,a:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.support{font-size:.85rem;color:var(--muted)}
+#layout{flex:1;display:flex;min-height:0}
+nav{width:250px;overflow-y:auto;background:var(--paper);border-right:1px solid var(--line);padding:.5rem 0}
+nav h2{font:600 .8rem var(--sans);color:var(--muted);margin:.9rem 1rem .3rem}
+nav button{display:block;width:100%;text-align:left;border:0;border-radius:0;padding:.35rem 1rem}
+nav button.on{background:var(--hi);font-weight:600}
+#chapters{display:flex;flex-wrap:wrap;gap:.3rem;padding:.4rem 1rem .8rem}
+#chapters button{width:2.4rem;padding:.3rem 0;text-align:center;border:1px solid var(--line);border-radius:6px}
+#chapters button.on{background:var(--accent);color:var(--accent-ink)}
+main{flex:1;overflow-y:auto;padding:1.5rem 1rem 8rem}
+article{max-width:38rem;margin:0 auto;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:1.5rem 1.5rem 2rem}
+article h2{font:600 1.9rem var(--serif);margin:0 0 1rem}
+.v{font:400 1.2rem/1.75 var(--serif);cursor:pointer;border-radius:4px;padding:.1rem .15rem;display:block}
+.v:hover{background:var(--hi)}
+.v.sel{background:var(--hi);box-shadow:inset 3px 0 0 var(--accent);padding-left:.5rem}
+.v sup{font:600 .7rem var(--sans);color:var(--accent);margin-right:.35rem}
+.pager{display:flex;justify-content:space-between;max-width:38rem;margin:1rem auto 0}
+.hint{max-width:38rem;margin:0 auto .75rem;color:var(--muted);font-size:.9rem}
+#panel{position:fixed;right:0;bottom:0;top:auto;width:100%;max-height:60vh;background:var(--panel);border-top:2px solid var(--accent);box-shadow:0 -6px 24px rgba(0,0,0,.18);transform:translateY(105%);transition:transform .25s;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom,0px)}
+#panel.open{transform:none}
+@media (prefers-reduced-motion:reduce){#panel{transition:none}}
+#panel .top{display:flex;justify-content:space-between;align-items:center;padding:.7rem 1rem;border-bottom:1px solid var(--line)}
+#panel .top b{font:600 1rem var(--serif)}
+#panel .body{overflow-y:auto;padding:1rem}
+#quote{font:italic 1.05rem/1.6 var(--serif);color:var(--muted);margin:0 0 1rem}
+#out{white-space:pre-wrap;line-height:1.65;font-size:1rem}
+.note{font-size:.8rem;color:var(--muted);margin-top:1rem}
+#bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden;margin:.6rem 0}
+#bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+#chat .b{margin:.75rem 0;padding:.6rem .8rem;border-radius:8px;white-space:pre-wrap;line-height:1.6}
+#chat .you{background:var(--hi)}
+#chat .ai{border:1px solid var(--line)}
+#ask{display:flex;gap:.5rem;padding:.7rem 1rem;border-top:1px solid var(--line)}
+#ask input{flex:1;min-width:0;font:inherit;font-size:16px;padding:.5rem .7rem;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink)}
+#auth,#pay{position:fixed;inset:0;z-index:20;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:1rem;overflow:auto}
+#auth[hidden],#pay[hidden]{display:none}
+#auth .card,#pay .card{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:1.5rem;width:100%;max-width:22rem}
+#auth h2,#pay h2{font:600 1.5rem var(--serif);margin:0 0 .25rem}
+#auth input{width:100%;font:inherit;font-size:16px;padding:.6rem .7rem;margin:.4rem 0;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+#auth button,#pay button{width:100%;margin-top:.5rem;padding:.6rem}
+#auth .link,#pay .link{border:0;background:none;color:var(--accent);text-decoration:underline;padding:.3rem}
+#auth .err{color:#c0392b;font-size:.9rem;min-height:1.2rem}
+#pastor,#saved{position:fixed;inset:0;z-index:15;background:var(--bg);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+#pastor[hidden],#saved[hidden]{display:none}
+#pastor .ph,#saved .ph{display:flex;justify-content:space-between;align-items:center;gap:.5rem;padding:.6rem 1rem;background:var(--paper);border-bottom:1px solid var(--line)}
+#pastor .ph b,#saved .ph b{font:600 1.1rem var(--serif)}
+#pmsgs{flex:1;overflow-y:auto;padding:1rem;width:100%;max-width:40rem;margin:0 auto}
+#pmsgs .b{margin:.7rem 0;padding:.7rem .9rem;border-radius:10px;white-space:pre-wrap;line-height:1.65;font:400 1.05rem/1.65 var(--serif)}
+#pmsgs .you{background:var(--hi);margin-left:2rem}
+#pmsgs .ai{border:1px solid var(--line);background:var(--paper);margin-right:2rem}
+#pastor .note{text-align:center;margin:.3rem 1rem}
+#pin{display:flex;gap:.5rem;padding:.7rem 1rem;border-top:1px solid var(--line);background:var(--paper)}
+#pin input{flex:1;min-width:0;font:inherit;font-size:16px;padding:.55rem .7rem;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+#saved{z-index:16}
+#slist{flex:1;overflow-y:auto;padding:0 1rem 1rem;width:100%;max-width:40rem;margin:0 auto}
+.sitem{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:.8rem .9rem;margin:.7rem 0}
+.sitem h3{font:600 1rem var(--sans);margin:0 0 .4rem}
+.sitem small{color:var(--muted);font-weight:400}
+.sitem .st{white-space:pre-wrap;font:400 1rem/1.6 var(--serif)}
+.sitem .acts{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.7rem}
+#ssearch{width:100%;font:inherit;font-size:16px;padding:.55rem .7rem;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink)}
+.sv{margin-top:.6rem;font-size:.85rem;padding:.2rem .6rem;font-family:var(--sans)}
+header{flex-wrap:wrap}
+header button,#pastor .ph button,#saved .ph button,#panel .top button{padding:.3rem .6rem;font-size:.85rem}
+#pastor .ph span{display:flex;gap:.4rem;flex-wrap:wrap}
+#menu{display:none}
+@media (min-width:900px){#panel{width:420px;top:0;max-height:none;border-top:0;border-left:2px solid var(--accent);transform:translateX(105%)}#panel.open{transform:none}}
+@media (max-width:899px){
+  nav{position:fixed;inset:0 20% 0 0;z-index:5;transform:translateX(-105%);transition:transform .2s;padding-top:calc(.5rem + env(safe-area-inset-top,0px))}
+  nav.open{transform:none;box-shadow:6px 0 24px rgba(0,0,0,.25)}
+  #menu{display:inline-block}
+  .support{display:none}
+}
+#load{max-width:38rem;margin:3rem auto;padding:0 1rem}
+#load h2{font:600 1.5rem var(--serif)}
+</style>
+</head>
+<body>
+<header>
+  <button id="menu" aria-label="Open books">Books</button>
+  <h1>Bible Reader</h1>
+  <!-- STRIPE: put your Stripe payment link or button here later -->
+  <span class="support" id="stripe-slot"></span>
+  <button id="savedBtn" hidden>Saved</button>
+  <button id="pastorBtn" class="primary" hidden>Pastor</button>
+  <button id="manage" hidden>Manage plan</button>
+  <button id="logout" hidden>Log out</button>
+  <button id="theme" aria-label="Toggle dark mode">Dark</button>
+</header>
+<div id="layout">
+  <nav id="nav"></nav>
+  <main id="main"></main>
+</div>
+<div id="auth" hidden><div class="card">
+  <h2 id="atitle">Log in</h2>
+  <p class="note" style="margin:0 0 .5rem">Sign in to read and get verse explanations.</p>
+  <input id="email" type="email" placeholder="Email" autocomplete="email">
+  <input id="pass" type="password" placeholder="Password (6+ characters)" autocomplete="current-password">
+  <div class="err" id="aerr"></div>
+  <button class="primary" id="asubmit">Log in</button>
+  <button class="link" id="aswitch">New here? Create an account</button>
+  <button class="link" id="areset">Forgot password?</button>
+</div></div>
+<div id="saved" hidden>
+  <div class="ph"><b>Saved</b><button id="sclose">Close</button></div>
+  <div style="padding:.6rem 1rem;width:100%;max-width:40rem;margin:0 auto"><input id="ssearch" type="text" placeholder="Search your saved items" autocomplete="off"></div>
+  <div id="slist"></div>
+  <p class="note" style="text-align:center;margin:.3rem 1rem">Saved on this device only. Clearing your browser data removes them.</p>
+</div>
+<div id="pastor" hidden>
+  <div class="ph"><b>Your AI Pastor</b><span><button id="psave">Save chat</button> <button id="pvoice">Voice: on</button> <button id="pclose">Close</button></span></div>
+  <div id="pmsgs"></div>
+  <p class="note" id="pnote">AI pastor. Not a human or a licensed counselor. Chats aren't saved. In an emergency, call your local emergency number.</p>
+  <div id="pin"><input id="pq" type="text" placeholder="Talk to your pastor" autocomplete="off" enterkeyhint="send"><button id="pmic" hidden>Speak</button><button id="psend" class="primary">Send</button></div>
+</div>
+<div id="pay" hidden><div class="card">
+  <h2>Start your free trial</h2>
+  <p class="note" style="margin:0 0 .5rem">7 days free. A card is needed to start. After the trial it is $4.99 per month, and you can cancel any time before it ends to pay nothing.</p>
+  <div class="err" id="perr"></div>
+  <button class="primary" id="ptrial">Start 7-day free trial</button>
+  <button id="pcheck">I already subscribed. Check again</button>
+  <button class="link" id="plogout">Log out</button>
+</div></div>
+<aside id="panel" aria-live="polite">
+  <div class="top"><b id="ref"></b><span><button id="savev">Save</button> <button id="close">Close</button></span></div>
+  <div class="body">
+    <p id="quote"></p>
+    <div id="status"></div>
+    <div id="out"></div>
+    <div id="chat"></div>
+    <p class="note" id="note" hidden>AI-generated. It can make mistakes. <span id="left"></span></p>
+  </div>
+  <div id="ask" hidden>
+    <input id="q" type="text" placeholder="Ask a question about this verse" autocomplete="off" enterkeyhint="send">
+    <button id="send" class="primary">Ask</button>
+  </div>
+</aside>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+
+const $ = id => document.getElementById(id);
+let books = [], bi = 0, ci = 0, sel = null, gen = null, genLoading = null, busy = false;
+
+/* ---------- storage helpers ---------- */
+const store = {
+  get(k){ try{ return localStorage.getItem(k) }catch{ return null } },
+  set(k,v){ try{ localStorage.setItem(k,v) }catch{} }
+};
+
+/* ---------- theme ---------- */
+const root = document.documentElement;
+const savedTheme = store.get("theme");
+if (savedTheme) root.dataset.theme = savedTheme;
+$("theme").onclick = () => {
+  const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme:dark)").matches;
+  root.dataset.theme = dark ? "light" : "dark";
+  store.set("theme", root.dataset.theme);
+};
+
+/* ---------- load the Bible (supports several common JSON layouts) ---------- */
+function normalize(data){
+  if (data && data.books) data = data.books;
+  if (data && data.verses) data = data.verses;
+  if (Array.isArray(data) && data[0] && data[0].chapters) {           // [{name, chapters:[[v,..],..]}]
+    const list = data.map((b,i)=>({ name: b.name || b.book || `Book ${i+1}`, chapters: b.chapters.map(ch => {
+      const arr = Array.isArray(ch) ? ch : (ch.verses || Object.values(ch));
+      return arr.map(v => typeof v === "string" ? v : (v.text || ""));
+    }) }));
+    if (list.length === 66) list.forEach((b,i)=>{ b.name = BOOK_NAMES[i]; });
+    return list;
+  }
+  if (Array.isArray(data) && data[0] && "text" in data[0]) {          // flat verse list
+    const map = new Map();
+    for (const v of data) {
+      const name = v.book_name || v.book || v.bookname;
+      const c = +v.chapter, n = +v.verse;
+      if (!map.has(name)) map.set(name, []);
+      const chs = map.get(name);
+      (chs[c-1] ||= [])[n-1] = (v.text||"").trim();
+    }
+    return [...map].map(([name,chapters])=>({name, chapters: chapters.map(c=>c||[])}));
+  }
+  if (data && typeof data === "object") {                             // {Book:{"1":{"1":"text"}}}
+    return Object.entries(data).map(([name,chs]) => ({
+      name,
+      chapters: Object.keys(chs).sort((a,b)=>a-b).map(c => {
+        const vs = chs[c]; return Array.isArray(vs) ? vs : Object.keys(vs).sort((a,b)=>a-b).map(k=>vs[k]);
+      })
+    }));
+  }
+  throw new Error("Unrecognized Bible JSON format");
+}
+
+const BOOK_NAMES = ["Genesis","Exodus","Leviticus","Numbers","Deuteronomy","Joshua","Judges","Ruth","1 Samuel","2 Samuel","1 Kings","2 Kings","1 Chronicles","2 Chronicles","Ezra","Nehemiah","Esther","Job","Psalms","Proverbs","Ecclesiastes","Song of Solomon","Isaiah","Jeremiah","Lamentations","Ezekiel","Daniel","Hosea","Joel","Amos","Obadiah","Jonah","Micah","Nahum","Habakkuk","Zephaniah","Haggai","Zechariah","Malachi","Matthew","Mark","Luke","John","Acts","Romans","1 Corinthians","2 Corinthians","Galatians","Ephesians","Philippians","Colossians","1 Thessalonians","2 Thessalonians","1 Timothy","2 Timothy","Titus","Philemon","Hebrews","James","1 Peter","2 Peter","1 John","2 John","3 John","Jude","Revelation"];
+const REMOTE_BIBLE = "https://raw.githubusercontent.com/midvash/bible-data/main/versions/en/kjv/kjv.json";
+
+async function start(){
+  $("main").innerHTML = `<div id="load"><h2>Loading the Bible…</h2><p>This takes a few seconds the first time.</p></div>`;
+  try {
+    let r = await fetch("bible.json").catch(() => null);          // your own file wins if you add one
+    if (!r || !r.ok) r = await fetch(REMOTE_BIBLE);               // otherwise load the KJV from the web
+    if (!r.ok) throw new Error("Bible file not found");
+    books = normalize(await r.json());
+    init();
+  } catch (e) {
+    console.error(e);
+    $("main").innerHTML = `<div id="load"><h2>Add your Bible file</h2>
+      <p>The Bible could not be loaded from the internet. Check your connection and reload, or choose a Bible JSON file from your computer.</p>
+      <input type="file" id="pick" accept=".json,application/json"></div>`;
+    $("pick").onchange = async ev => {
+      try { books = normalize(JSON.parse(await ev.target.files[0].text())); init(); }
+      catch { alert("That file's layout wasn't recognized. See the README for supported formats."); }
+    };
+  }
+}
+
+/* ---------- UI ---------- */
+function init(){
+  const s = JSON.parse(store.get("pos") || "null");
+  if (s && books[s.b]) { bi = s.b; ci = Math.min(s.c, books[s.b].chapters.length-1); }
+  buildNav(); show();
+}
+
+function buildNav(){
+  const nav = $("nav");
+  nav.innerHTML = "";
+  books.forEach((b,i)=>{
+    if (books.length === 66 && (i===0 || i===39)) {
+      const h = document.createElement("h2"); h.textContent = i===0 ? "Old Testament" : "New Testament"; nav.append(h);
+    }
+    const btn = document.createElement("button");
+    btn.textContent = b.name; btn.dataset.i = i;
+    btn.onclick = () => { bi = i; ci = 0; show(); };
+    nav.append(btn);
+    if (i === bi) { const ch = document.createElement("div"); ch.id = "chapters"; ch.dataset.for = i; nav.append(ch); }
+  });
+}
+
+function renderChapterButtons(){
+  const old = $("chapters"); if (old) old.remove();
+  const btns = [...$("nav").querySelectorAll("button[data-i]")];
+  btns.forEach(b => b.classList.toggle("on", +b.dataset.i === bi));
+  const cur = btns.find(b => +b.dataset.i === bi);
+  const box = document.createElement("div"); box.id = "chapters";
+  books[bi].chapters.forEach((_,c)=>{
+    const b = document.createElement("button");
+    b.textContent = c+1; b.className = c===ci ? "on" : "";
+    b.onclick = () => { ci = c; show(); closeNav(); };
+    box.append(b);
+  });
+  cur.after(box);
+}
+
+function show(){
+  const b = books[bi], verses = b.chapters[ci] || [];
+  store.set("pos", JSON.stringify({b:bi,c:ci}));
+  renderChapterButtons();
+  const main = $("main");
+  main.innerHTML = `<p class="hint">Tap any verse to get a plain-English explanation.</p>
+    <article><h2>${b.name} ${ci+1}</h2></article><div class="pager"><button id="prev">Previous</button><button id="next">Next</button></div>`;
+  const art = main.querySelector("article");
+  verses.forEach((t,i)=>{
+    const p = document.createElement("span");
+    p.className = "v"; p.tabIndex = 0; p.setAttribute("role","button");
+    p.innerHTML = `<sup>${i+1}</sup>`; p.append(document.createTextNode(t));
+    const go = () => { document.querySelectorAll(".v.sel").forEach(x=>x.classList.remove("sel")); p.classList.add("sel"); explain(i+1, t); };
+    p.onclick = go; p.onkeydown = e => { if (e.key==="Enter"||e.key===" "){ e.preventDefault(); go(); } };
+    art.append(p);
+  });
+  $("prev").onclick = () => step(-1); $("next").onclick = () => step(1);
+  main.scrollTop = 0; closePanel();
+}
+
+function step(d){
+  ci += d;
+  if (ci < 0) { if (bi>0) { bi--; ci = books[bi].chapters.length-1; } else ci = 0; }
+  else if (ci >= books[bi].chapters.length) { if (bi<books.length-1) { bi++; ci = 0; } else ci = books[bi].chapters.length-1; }
+  buildNav(); show();
+}
+
+const closeNav = () => $("nav").classList.remove("open");
+$("menu").onclick = () => $("nav").classList.toggle("open");
+function closePanel(){ $("panel").classList.remove("open"); $("ask").hidden = true; }
+$("close").onclick = () => { closePanel(); document.querySelectorAll(".v.sel").forEach(x=>x.classList.remove("sel")); };
+
+/* ---------- answers come from our server (fast, saved after the first ask) ---------- */
+let convo = [], tapId = 0, curB = 0, curC = 0, curV = 1;
+
+async function callApi(payload, url = "/api/ask"){
+  if (!user) throw new Error("Please log in first.");
+  const token = await user.getIdToken();
+  const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json", authorization: "Bearer " + token }, body: JSON.stringify(payload) });
+  let d = {}; try { d = await r.json(); } catch {}
+  if (!r.ok) { if (d.code === "subscribe") $("pay").hidden = false; throw new Error(d.message || "Something went wrong. Please try again."); }
+  return d;
+}
+const scrollDown = () => { const b = $("panel").querySelector(".body"); b.scrollTop = b.scrollHeight; };
+function bubble(kind, text){
+  const d = document.createElement("div");
+  d.className = "b " + kind; d.textContent = text;
+  $("chat").append(d); scrollDown(); return d;
+}
+
+async function explain(v, text){
+  const my = ++tapId; curB = bi; curC = ci; curV = v; convo = [];
+  $("ref").textContent = `${books[bi].name} ${ci+1}:${v}`;
+  $("quote").textContent = text;
+  $("out").textContent = ""; $("chat").innerHTML = ""; $("note").hidden = true; $("ask").hidden = true;
+  $("status").textContent = "Loading the answer…";
+  $("panel").classList.add("open");
+  try {
+    const d = await callApi({ action: "explain", b: curB, c: curC, v });
+    if (my !== tapId) return;
+    $("status").textContent = ""; $("out").textContent = d.text;
+    convo = [{ role: "user", content: "Explain this verse." }, { role: "assistant", content: d.text }];
+    $("note").hidden = false; $("ask").hidden = false;
+  } catch (e) { if (my === tapId) $("status").textContent = e.message; }
+}
+
+async function ask(){
+  const q = $("q").value.trim();
+  if (!q || busy || convo.length < 2) return;
+  busy = true; $("q").value = ""; $("send").disabled = true;
+  const my = tapId;
+  bubble("you", q);
+  const el = bubble("ai", "Loading the answer…");
+  try {
+    const d = await callApi({ action: "ask", b: curB, c: curC, v: curV, question: q, history: convo.slice(-6) });
+    if (my !== tapId) return;
+    el.textContent = d.text; scrollDown();
+    convo.push({ role: "user", content: q }, { role: "assistant", content: d.text });
+    if (typeof d.remaining === "number") $("left").textContent = `${d.remaining} questions left today.`;
+  } catch (e) { el.textContent = e.message; }
+  finally { busy = false; $("send").disabled = false; }
+}
+$("send").onclick = ask;
+$("q").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); ask(); } });
+const verseText = (c, i) => (books[bi].chapters[c] || [])[i] || "";
+
+/* ---------- AI pastor ---------- */
+const OPENER = "Hi, I'm your AI pastor for today. Do you want me to talk about anything or pray with you?";
+const BASE_NOTE = $("pnote").textContent;
+let pHist = [], pBusy = false, voiceOn = store.get("voice") !== "off";
+$("pvoice").textContent = "Voice: " + (voiceOn ? "on" : "off");
+const canSpeak = "speechSynthesis" in window;
+function pickVoice(){
+  const vs = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang));
+  const score = v => (/premium|enhanced|natural|neural/i.test(v.name) ? 4 : 0) + (/daniel|aaron|arthur|reed|fred|alex|david|ryan|guy/i.test(v.name) ? 2 : 0) + (/en[-_](US|GB|AU)/i.test(v.lang) ? 1 : 0);
+  return vs.sort((a, b) => score(b) - score(a))[0] || null;
+}
+function speak(t){
+  if (!voiceOn || !canSpeak) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(t), v = pickVoice();
+  if (v) u.voice = v;
+  u.rate = 0.95; u.pitch = 0.95;
+  speechSynthesis.speak(u);
+}
+function pBubble(kind, text){
+  const d = document.createElement("div"); d.className = "b " + kind; d.textContent = text;
+  $("pmsgs").append(d); d.scrollIntoView({ block: "end" }); return d;
+}
+function pReset(){ $("pastor").hidden = true; $("pmsgs").innerHTML = ""; pHist = []; $("pnote").textContent = BASE_NOTE; if (canSpeak) speechSynthesis.cancel(); }
+$("pastorBtn").onclick = () => {
+  $("pastor").hidden = false;
+  if (!$("pmsgs").children.length) { pBubble("ai", OPENER); pHist = [{ role: "assistant", content: OPENER }]; speak(OPENER); }
+  $("pq").focus();
+};
+$("pclose").onclick = () => { $("pastor").hidden = true; if (canSpeak) speechSynthesis.cancel(); };
+$("pvoice").onclick = () => { voiceOn = !voiceOn; store.set("voice", voiceOn ? "on" : "off"); $("pvoice").textContent = "Voice: " + (voiceOn ? "on" : "off"); if (!voiceOn && canSpeak) speechSynthesis.cancel(); };
+async function pSend(){
+  const q = $("pq").value.trim();
+  if (!q || pBusy) return;
+  pBusy = true; $("pq").value = ""; $("psend").disabled = true;
+  if (canSpeak) speechSynthesis.cancel();
+  pBubble("you", q);
+  const el = pBubble("ai", "...");
+  try {
+    const d = await callApi({ history: pHist.slice(-12), message: q }, "/api/pastor");
+    el.textContent = d.text; addSaveBtn(el, d.text); el.scrollIntoView({ block: "end" });
+    pHist.push({ role: "user", content: q }, { role: "assistant", content: d.text });
+    speak(d.text);
+    if (typeof d.remaining === "number") $("pnote").textContent = BASE_NOTE + " " + d.remaining + " messages left today.";
+  } catch (e) { el.textContent = e.message; }
+  finally { pBusy = false; $("psend").disabled = false; }
+}
+$("psend").onclick = pSend;
+$("pq").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); pSend(); } });
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (SR) {
+  let rec = null;
+  $("pmic").hidden = false;
+  $("pmic").onclick = () => {
+    if (rec) { rec.stop(); return; }
+    if (canSpeak) speechSynthesis.cancel();
+    rec = new SR(); rec.lang = navigator.language || "en-US"; rec.interimResults = false;
+    rec.onresult = e => { $("pq").value = e.results[0][0].transcript; };
+    rec.onend = () => { rec = null; $("pmic").textContent = "Speak"; if ($("pq").value.trim()) pSend(); };
+    rec.onerror = () => {};
+    $("pmic").textContent = "Stop"; rec.start();
+  };
+}
+
+/* ---------- saved items (kept on this device) ---------- */
+const skey = () => "saved:" + (user ? user.uid : "x");
+function loadSaved(){ try { return JSON.parse(store.get(skey()) || "[]"); } catch { return []; } }
+function putSaved(a){ store.set(skey(), JSON.stringify(a.slice(0, 300))); }
+function addItem(it){
+  let a = loadSaved();
+  if (it.type === "verse") a = a.filter(x => !(x.type === "verse" && x.ref === it.ref));
+  a.unshift({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), ts: Date.now(), ...it });
+  putSaved(a);
+}
+const mkBtn = (label, fn) => { const b = document.createElement("button"); b.textContent = label; b.onclick = fn; return b; };
+const stamp = () => new Date().toLocaleDateString();
+
+function renderSaved(){
+  const q = $("ssearch").value.trim().toLowerCase(), list = $("slist");
+  list.innerHTML = "";
+  const items = loadSaved().filter(x => !q || (x.title + " " + x.text).toLowerCase().includes(q));
+  if (!items.length) { list.innerHTML = '<p class="note" style="text-align:center">Nothing here yet. Tap Save on a verse, on a pastor reply, or Save chat to keep a whole conversation.</p>'; return; }
+  for (const x of items) {
+    const d = document.createElement("div"); d.className = "sitem";
+    const h = document.createElement("h3"); h.textContent = x.title;
+    const sm = document.createElement("small"); sm.textContent = " · " + new Date(x.ts).toLocaleDateString(); h.append(sm);
+    const t = document.createElement("div"); t.className = "st"; t.textContent = x.text;
+    const acts = document.createElement("div"); acts.className = "acts";
+    const copy = mkBtn("Copy", async () => { try { await navigator.clipboard.writeText(x.text); copy.textContent = "Copied"; } catch { copy.textContent = "Copy failed"; } });
+    acts.append(copy);
+    if (x.type === "verse" && books[x.b]) acts.append(mkBtn("Go to verse", () => {
+      bi = x.b; ci = x.c; buildNav(); show(); $("saved").hidden = true;
+      const el = document.querySelectorAll(".v")[x.v - 1];
+      if (el) { el.classList.add("sel"); el.scrollIntoView({ block: "center" }); }
+    }));
+    acts.append(mkBtn("Delete", () => { if (confirm("Delete this saved item?")) { putSaved(loadSaved().filter(y => y.id !== x.id)); renderSaved(); } }));
+    d.append(h, t, acts); list.append(d);
+  }
+}
+$("savedBtn").onclick = () => { $("ssearch").value = ""; renderSaved(); $("saved").hidden = false; };
+$("sclose").onclick = () => { $("saved").hidden = true; };
+$("ssearch").addEventListener("input", renderSaved);
+
+const flash = (btn, done, back) => { btn.textContent = done; setTimeout(() => { btn.textContent = back; }, 1500); };
+$("savev").onclick = () => {
+  const ref = $("ref").textContent, verse = $("quote").textContent, exp = $("out").textContent.trim();
+  if (!ref) return;
+  addItem({ type: "verse", title: ref, ref, b: curB, c: curC, v: curV, text: verse + (exp ? "\n\n" + exp : "") });
+  flash($("savev"), "Saved", "Save");
+};
+$("psave").onclick = () => {
+  if (pHist.length < 2) return;
+  const text = pHist.map(m => (m.role === "user" ? "Me: " : "Pastor: ") + m.content).join("\n\n");
+  addItem({ type: "chat", title: "Pastor chat", text });
+  flash($("psave"), "Saved", "Save chat");
+};
+function addSaveBtn(el, text){
+  const b = mkBtn("Save", () => { addItem({ type: "pastor", title: "Pastor · " + stamp(), text }); b.textContent = "Saved"; b.disabled = true; });
+  b.className = "sv"; el.append(document.createElement("br"), b);
+}
+
+/* ---------- login ---------- */
+let auth = null, user = null, mode = "login", cfg = {};
+const aerr = m => { $("aerr").textContent = m; };
+const nice = e => ({ "auth/invalid-credential": "Wrong email or password.", "auth/user-not-found": "Wrong email or password.", "auth/wrong-password": "Wrong email or password.", "auth/email-already-in-use": "That email already has an account. Try logging in.", "auth/weak-password": "Password needs 6 or more characters.", "auth/invalid-email": "That email doesn't look right.", "auth/too-many-requests": "Too many tries. Wait a minute.", "auth/popup-closed-by-user": "" }[e.code] ?? "Something went wrong. Please try again.");
+const ready = () => { if (!auth) { aerr("Login isn't set up yet."); return false; } aerr(""); return true; };
+
+$("asubmit").onclick = async () => {
+  if (!ready()) return;
+  const em = $("email").value.trim(), pw = $("pass").value;
+  if (!em || !pw) return aerr("Enter your email and password.");
+  try { mode === "login" ? await signInWithEmailAndPassword(auth, em, pw) : await createUserWithEmailAndPassword(auth, em, pw); }
+  catch (e) { aerr(nice(e)); }
+};
+$("aswitch").onclick = () => {
+  mode = mode === "login" ? "signup" : "login";
+  $("atitle").textContent = $("asubmit").textContent = mode === "login" ? "Log in" : "Create account";
+  $("aswitch").textContent = mode === "login" ? "New here? Create an account" : "Have an account? Log in";
+  aerr("");
+};
+$("areset").onclick = async () => {
+  if (!ready()) return;
+  const em = $("email").value.trim(); if (!em) return aerr("Type your email above first.");
+  try { await sendPasswordResetEmail(auth, em); aerr("Reset email sent. Check your inbox."); } catch (e) { aerr(nice(e)); }
+};
+$("logout").onclick = () => { if (auth) signOut(auth); closePanel(); pReset(); $("saved").hidden = true; };
+
+async function checkSub(){
+  $("perr").textContent = "";
+  try {
+    const d = await callApi({ action: "status" });
+    $("pay").hidden = d.active;
+    $("manage").hidden = !(d.active && cfg.portalLink);
+    $("pastorBtn").hidden = !d.active;
+    $("savedBtn").hidden = !d.active;
+    if (!d.active && $("pcheck").dataset.tried) $("perr").textContent = "No subscription found yet. It can take a few seconds, so try again.";
+  } catch (e) { $("pay").hidden = false; }
+}
+$("pcheck").onclick = () => { $("pcheck").dataset.tried = "1"; checkSub(); };
+$("ptrial").onclick = () => {
+  if (!cfg.paymentLink) { $("perr").textContent = "Payments aren't set up yet."; return; }
+  const sep = cfg.paymentLink.includes("?") ? "&" : "?";
+  location.href = cfg.paymentLink + sep + "client_reference_id=" + encodeURIComponent(user.uid) + "&prefilled_email=" + encodeURIComponent(user.email || "");
+};
+$("manage").onclick = () => { location.href = cfg.portalLink; };
+$("plogout").onclick = () => { if (auth) signOut(auth); $("pay").hidden = true; };
+
+async function initAuth(){
+  try {
+    const r = await fetch("/api/ask", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "config" }) });
+    cfg = await r.json();
+    if (!cfg.apiKey) throw new Error("no config");
+    auth = getAuth(initializeApp(cfg));
+    onAuthStateChanged(auth, u => {
+      user = u; $("auth").hidden = !!u; $("logout").hidden = !u;
+      if (u) checkSub(); else { $("pay").hidden = true; $("manage").hidden = true; $("pastorBtn").hidden = true; $("savedBtn").hidden = true; $("saved").hidden = true; pReset(); }
+    });
+  } catch (e) { $("auth").hidden = false; aerr("Login isn't set up yet."); }
+}
+
+start();
+initAuth();
+</script>
+</body>
+</html>

@@ -2,5 +2,5 @@
   "name": "bible-site",
   "private": true,
   "type": "module",
-  "dependencies": { "@netlify/blobs": "latest" }
+  "dependencies": { "@netlify/blobs": "latest", "jose": "latest" }
 }
