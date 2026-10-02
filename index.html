@@ -96,6 +96,8 @@ header button,#pastor .ph button,#saved .ph button,#panel .top button{padding:.3
 #home h1{font:600 2rem var(--serif);margin:0 0 .4rem;text-align:center}
 .hbtn{width:100%;max-width:24rem;display:block;text-align:left;padding:1.1rem 1.2rem;border-radius:12px;background:var(--paper);border:1px solid var(--line);font:600 1.3rem var(--serif)}
 .hbtn small{display:block;margin-top:.25rem;font:400 .9rem var(--sans);color:var(--muted)}
+#boot{position:fixed;inset:0;z-index:30;background:var(--bg);color:var(--muted);display:flex;align-items:center;justify-content:center;font:1rem var(--sans)}
+#boot[hidden]{display:none}
 #menu{display:none}
 @media (min-width:900px){#panel{width:420px;top:0;max-height:none;border-top:0;border-left:2px solid var(--accent);transform:translateX(105%)}#panel.open{transform:none}}
 @media (max-width:899px){
@@ -109,6 +111,8 @@ header button,#pastor .ph button,#saved .ph button,#panel .top button{padding:.3
 </style>
 </head>
 <body>
+<div id="boot"><p>Loading...</p></div>
+<script>setTimeout(function(){var b=document.getElementById("boot");if(b&&!window.__ready){b.querySelector("p").textContent="Having trouble loading. Check your connection and reload the page.";}},10000);</script>
 <header>
   <button id="menu" aria-label="Open books">Books</button>
   <h1>Bible Reader</h1>
@@ -566,10 +570,10 @@ async function initAuth(){
     if (!cfg.apiKey) throw new Error("no config");
     auth = getAuth(initializeApp(cfg));
     onAuthStateChanged(auth, u => {
-      user = u; $("auth").hidden = !!u; $("logout").hidden = !u; $("home").hidden = !u; $("homeBtn").hidden = !u;
+      user = u; $("auth").hidden = !!u; $("logout").hidden = !u; $("home").hidden = !u; $("homeBtn").hidden = !u; $("boot").hidden = true; window.__ready = true;
       if (u) checkSub(); else { active = null; $("pay").hidden = true; $("manage").hidden = true; $("pastorBtn").hidden = true; $("savedBtn").hidden = true; $("saved").hidden = true; pReset(); }
     });
-  } catch (e) { $("auth").hidden = false; aerr("Login isn't set up yet."); }
+  } catch (e) { $("auth").hidden = false; aerr("Login isn't set up yet."); $("boot").hidden = true; window.__ready = true; }
 }
 
 start();
