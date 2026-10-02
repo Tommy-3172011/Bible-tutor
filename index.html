@@ -143,10 +143,11 @@ header button,#pastor .ph button,#saved .ph button,#panel .top button{padding:.3
 </div>
 <div id="pay" hidden><div class="card">
   <h2>Start your free trial</h2>
-  <p class="note" style="margin:0 0 .5rem">7 days free. A card is needed to start. After the trial it is $4.99 per month, and you can cancel any time before it ends to pay nothing.</p>
+  <p class="note" style="margin:0 0 .5rem">Verse explanations, follow-up questions and your AI pastor are included. 7 days free, and a card is needed to start. After the trial it is $4.99 per month, and you can cancel any time before it ends to pay nothing.</p>
   <div class="err" id="perr"></div>
   <button class="primary" id="ptrial">Start 7-day free trial</button>
   <button id="pcheck">I already subscribed. Check again</button>
+  <button id="pnot">Not now, keep reading</button>
   <button class="link" id="plogout">Log out</button>
 </div></div>
 <aside id="panel" aria-live="polite">
@@ -332,6 +333,7 @@ function bubble(kind, text){
 }
 
 async function explain(v, text){
+  if (active === false) { $("pay").hidden = false; return; }
   const my = ++tapId; curB = bi; curC = ci; curV = v; convo = [];
   $("ref").textContent = `${books[bi].name} ${ci+1}:${v}`;
   $("quote").textContent = text;
@@ -392,6 +394,7 @@ function pBubble(kind, text){
 }
 function pReset(){ $("pastor").hidden = true; $("pmsgs").innerHTML = ""; pHist = []; $("pnote").textContent = BASE_NOTE; if (canSpeak) speechSynthesis.cancel(); }
 $("pastorBtn").onclick = () => {
+  if (active === false) { $("pay").hidden = false; return; }
   $("pastor").hidden = false;
   if (!$("pmsgs").children.length) { pBubble("ai", OPENER); pHist = [{ role: "assistant", content: OPENER }]; speak(OPENER); }
   $("pq").focus();
@@ -489,9 +492,9 @@ function addSaveBtn(el, text){
 }
 
 /* ---------- login ---------- */
-let auth = null, user = null, mode = "login", cfg = {};
+let auth = null, user = null, mode = "login", cfg = {}, active = null;
 const aerr = m => { $("aerr").textContent = m; };
-const nice = e => ({ "auth/invalid-credential": "Wrong email or password.", "auth/user-not-found": "Wrong email or password.", "auth/wrong-password": "Wrong email or password.", "auth/email-already-in-use": "That email already has an account. Try logging in.", "auth/weak-password": "Password needs 6 or more characters.", "auth/invalid-email": "That email doesn't look right.", "auth/too-many-requests": "Too many tries. Wait a minute.", "auth/popup-closed-by-user": "" }[e.code] ?? "Something went wrong. Please try again.");
+const nice = e => ({ "auth/invalid-credential": "Wrong email or password.", "auth/user-not-found": "Wrong email or password.", "auth/wrong-password": "Wrong email or password.", "auth/email-already-in-use": "That email already has an account. Try logging in.", "auth/weak-password": "Password needs 6 or more characters.", "auth/invalid-email": "That email doesn't look right.", "auth/too-many-requests": "Too many tries. Wait a minute.", "auth/popup-closed-by-user": "", "auth/network-request-failed": "No connection. Check your internet and try again." }[e.code] ?? ("Something went wrong (" + (e.code || e.message || "unknown") + "). Please try again."));
 const ready = () => { if (!auth) { aerr("Login isn't set up yet."); return false; } aerr(""); return true; };
 
 $("asubmit").onclick = async () => {
@@ -514,18 +517,20 @@ $("areset").onclick = async () => {
 };
 $("logout").onclick = () => { if (auth) signOut(auth); closePanel(); pReset(); $("saved").hidden = true; };
 
-async function checkSub(){
+async function checkSub(manual){
   $("perr").textContent = "";
   try {
     const d = await callApi({ action: "status" });
-    $("pay").hidden = d.active;
-    $("manage").hidden = !(d.active && cfg.portalLink);
-    $("pastorBtn").hidden = !d.active;
-    $("savedBtn").hidden = !d.active;
-    if (!d.active && $("pcheck").dataset.tried) $("perr").textContent = "No subscription found yet. It can take a few seconds, so try again.";
-  } catch (e) { $("pay").hidden = false; }
+    active = !!d.active;
+    if (active) $("pay").hidden = true;
+    else if (manual === true) $("perr").textContent = "No subscription found yet. It can take a few seconds, so try again.";
+    $("manage").hidden = !(active && cfg.portalLink);
+    $("pastorBtn").hidden = false;
+    $("savedBtn").hidden = !active;
+  } catch (e) { /* keep reading; the server checks again when a feature is used */ }
 }
-$("pcheck").onclick = () => { $("pcheck").dataset.tried = "1"; checkSub(); };
+$("pcheck").onclick = () => checkSub(true);
+$("pnot").onclick = () => { $("pay").hidden = true; };
 $("ptrial").onclick = () => {
   if (!cfg.paymentLink) { $("perr").textContent = "Payments aren't set up yet."; return; }
   const sep = cfg.paymentLink.includes("?") ? "&" : "?";
@@ -542,7 +547,7 @@ async function initAuth(){
     auth = getAuth(initializeApp(cfg));
     onAuthStateChanged(auth, u => {
       user = u; $("auth").hidden = !!u; $("logout").hidden = !u;
-      if (u) checkSub(); else { $("pay").hidden = true; $("manage").hidden = true; $("pastorBtn").hidden = true; $("savedBtn").hidden = true; $("saved").hidden = true; pReset(); }
+      if (u) checkSub(); else { active = null; $("pay").hidden = true; $("manage").hidden = true; $("pastorBtn").hidden = true; $("savedBtn").hidden = true; $("saved").hidden = true; pReset(); }
     });
   } catch (e) { $("auth").hidden = false; aerr("Login isn't set up yet."); }
 }
