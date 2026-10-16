@@ -153,7 +153,7 @@ header button,#pastor .ph button,#saved .ph button,#panel .top button{padding:.3
   <p class="note" style="text-align:center;margin:.3rem 1rem">Saved on this device only. Clearing your browser data removes them.</p>
 </div>
 <div id="pastor" hidden>
-  <div class="ph"><b>Your AI Pastor</b><span><button id="psave">Save chat</button> <button id="pvoice">Voice: on</button> <button id="pclose">Close</button></span></div>
+  <div class="ph"><b>Your AI Pastor</b><span><button id="psave">Save chat</button> <button id="pclose">Close</button></span></div>
   <div id="pmsgs"></div>
   <p class="note" id="pnote">AI pastor. Not a human or a licensed counselor. Chats aren't saved. In an emergency, call your local emergency number.</p>
   <div id="pin"><input id="pq" type="text" placeholder="Talk to your pastor" autocomplete="off" enterkeyhint="send"><button id="pmic" hidden>Speak</button><button id="psend" class="primary">Send</button></div>
@@ -389,47 +389,112 @@ const verseText = (c, i) => (books[bi].chapters[c] || [])[i] || "";
 /* ---------- AI pastor ---------- */
 const OPENER = "Hi, I'm your AI pastor for today. Do you want me to talk about anything or pray with you?";
 const BASE_NOTE = $("pnote").textContent;
-let pHist = [], pBusy = false, voiceOn = store.get("voice") !== "off";
-$("pvoice").textContent = "Voice: " + (voiceOn ? "on" : "off");
+let pHist = [], pBusy = false;
 const canSpeak = "speechSynthesis" in window;
 function pickVoice(){
   const vs = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang));
   const score = v => (/premium|enhanced|natural|neural/i.test(v.name) ? 4 : 0) + (/daniel|aaron|arthur|reed|fred|alex|david|ryan|guy/i.test(v.name) ? 2 : 0) + (/en[-_](US|GB|AU)/i.test(v.lang) ? 1 : 0);
   return vs.sort((a, b) => score(b) - score(a))[0] || null;
 }
-function speak(t){
-  if (!voiceOn || !canSpeak) return;
-  speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(t), v = pickVoice();
-  if (v) u.voice = v;
-  u.rate = 0.95; u.pitch = 0.95;
-  speechSynthesis.speak(u);
+const SILENT = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+const player = new Audio();
+let readToken = 0, resolvePlay = null;
+function stopReading(){
+  readToken++;
+  try { player.pause(); } catch {}
+  if (resolvePlay) { const r = resolvePlay; resolvePlay = null; r(); }
+  if (canSpeak) speechSynthesis.cancel();
+  document.querySelectorAll(".ro").forEach(b => { b.textContent = "Read out"; b.dataset.on = ""; });
+}
+function splitText(t){
+  const out = []; let cur = "";
+  for (const s of (t.replace(/\s+/g, " ").match(/[^.!?]+[.!?]*\s*/g) || [t])) {
+    if ((cur + s).length > 800 && cur) { out.push(cur.trim()); cur = s; } else cur += s;
+  }
+  if (cur.trim()) out.push(cur.trim());
+  return out;
+}
+function playPcm(b64, mime){
+  return new Promise((resolve, reject) => {
+    const m = /rate=(\d+)/.exec(mime || ""), rate = m ? +m[1] : 24000;
+    const bin = atob(b64), n = bin.length, buf = new ArrayBuffer(44 + n), v = new DataView(buf);
+    const w = (o, str) => { for (let i = 0; i < str.length; i++) v.setUint8(o + i, str.charCodeAt(i)); };
+    w(0, "RIFF"); v.setUint32(4, 36 + n, true); w(8, "WAVE"); w(12, "fmt "); v.setUint32(16, 16, true);
+    v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true);
+    v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, "data"); v.setUint32(40, n, true);
+    const u8 = new Uint8Array(buf); for (let i = 0; i < n; i++) u8[44 + i] = bin.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
+    resolvePlay = resolve;
+    player.onended = () => { resolvePlay = null; URL.revokeObjectURL(url); resolve(); };
+    player.onerror = () => { resolvePlay = null; URL.revokeObjectURL(url); reject(new Error("The audio couldn't play. Using your device voice instead.")); };
+    player.src = url;
+    player.play().catch(e => { resolvePlay = null; reject(new Error("The audio couldn't play. Using your device voice instead.")); });
+  });
+}
+function deviceSpeak(t){
+  return new Promise(resolve => {
+    if (!canSpeak) return resolve();
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(t), v = pickVoice();
+    if (v) u.voice = v;
+    u.rate = 0.95; u.pitch = 0.95;
+    u.onend = u.onerror = () => resolve();
+    speechSynthesis.speak(u);
+  });
+}
+async function readOut(text, btn){
+  if (btn.dataset.on === "1") { stopReading(); return; }
+  stopReading();
+  const my = readToken;
+  btn.dataset.on = "1"; btn.textContent = "Loading voice...";
+  player.src = SILENT; player.play().catch(() => {});   // lets iPhone play audio after the tap
+  const parts = splitText(text);
+  try {
+    let next = callApi({ text: parts[0] }, "/api/speak").catch(e => ({ err: e }));
+    for (let i = 0; i < parts.length; i++) {
+      const d = await next;
+      if (my !== readToken) return;
+      if (d.err) throw d.err;
+      if (i + 1 < parts.length) next = callApi({ text: parts[i + 1] }, "/api/speak").catch(e => ({ err: e }));
+      btn.textContent = "Stop";
+      await playPcm(d.audio, d.mime);
+      if (my !== readToken) return;
+    }
+  } catch (e) {
+    if (my !== readToken) return;
+    $("pnote").textContent = BASE_NOTE + " " + e.message;
+    btn.textContent = "Stop";
+    await deviceSpeak(text);
+  }
+  if (my === readToken) { btn.textContent = "Read out"; btn.dataset.on = ""; }
+}
+function addReadBtn(el, text){
+  const b = mkBtn("Read out", () => readOut(text, b));
+  b.className = "sv ro"; el.append(document.createElement("br"), b); return b;
 }
 function pBubble(kind, text){
   const d = document.createElement("div"); d.className = "b " + kind; d.textContent = text;
   $("pmsgs").append(d); d.scrollIntoView({ block: "end" }); return d;
 }
-function pReset(){ $("pastor").hidden = true; $("pmsgs").innerHTML = ""; pHist = []; $("pnote").textContent = BASE_NOTE; if (canSpeak) speechSynthesis.cancel(); }
+function pReset(){ $("pastor").hidden = true; $("pmsgs").innerHTML = ""; pHist = []; $("pnote").textContent = BASE_NOTE; stopReading(); }
 $("pastorBtn").onclick = () => {
   if (active === false) { $("pay").hidden = false; return; }
   $("pastor").hidden = false;
-  if (!$("pmsgs").children.length) { pBubble("ai", OPENER); pHist = [{ role: "assistant", content: OPENER }]; speak(OPENER); }
+  if (!$("pmsgs").children.length) { const ob = pBubble("ai", OPENER); addReadBtn(ob, OPENER); pHist = [{ role: "assistant", content: OPENER }]; }
   $("pq").focus();
 };
-$("pclose").onclick = () => { $("pastor").hidden = true; if (canSpeak) speechSynthesis.cancel(); };
-$("pvoice").onclick = () => { voiceOn = !voiceOn; store.set("voice", voiceOn ? "on" : "off"); $("pvoice").textContent = "Voice: " + (voiceOn ? "on" : "off"); if (!voiceOn && canSpeak) speechSynthesis.cancel(); };
+$("pclose").onclick = () => { $("pastor").hidden = true; stopReading(); };
 async function pSend(){
   const q = $("pq").value.trim();
   if (!q || pBusy) return;
   pBusy = true; $("pq").value = ""; $("psend").disabled = true;
-  if (canSpeak) speechSynthesis.cancel();
+  stopReading();
   pBubble("you", q);
   const el = pBubble("ai", "...");
   try {
     const d = await callApi({ history: pHist.slice(-12), message: q }, "/api/pastor");
-    el.textContent = d.text; addSaveBtn(el, d.text); el.scrollIntoView({ block: "end" });
+    el.textContent = d.text; addReadBtn(el, d.text); addSaveBtn(el, d.text); el.scrollIntoView({ block: "end" });
     pHist.push({ role: "user", content: q }, { role: "assistant", content: d.text });
-    speak(d.text);
     if (typeof d.remaining === "number") $("pnote").textContent = BASE_NOTE + " " + d.remaining + " messages left today.";
   } catch (e) { el.textContent = e.message; }
   finally { pBusy = false; $("psend").disabled = false; }
@@ -442,7 +507,7 @@ if (SR) {
   $("pmic").hidden = false;
   $("pmic").onclick = () => {
     if (rec) { rec.stop(); return; }
-    if (canSpeak) speechSynthesis.cancel();
+    stopReading();
     rec = new SR(); rec.lang = navigator.language || "en-US"; rec.interimResults = false;
     rec.onresult = e => { $("pq").value = e.results[0][0].transcript; };
     rec.onend = () => { rec = null; $("pmic").textContent = "Speak"; if ($("pq").value.trim()) pSend(); };
@@ -505,7 +570,7 @@ $("psave").onclick = () => {
 };
 function addSaveBtn(el, text){
   const b = mkBtn("Save", () => { addItem({ type: "pastor", title: "Pastor · " + stamp(), text }); b.textContent = "Saved"; b.disabled = true; });
-  b.className = "sv"; el.append(document.createElement("br"), b);
+  b.className = "sv"; el.append(" ", b);
 }
 
 /* ---------- home screen ---------- */
