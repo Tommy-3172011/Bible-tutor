@@ -1,8 +1,9 @@
 import { getStore } from "@netlify/blobs";
 import { createRemoteJWKSet, jwtVerify } from "jose";
+import { createHash } from "node:crypto";
 
 // ===== Settings you can change =====
-const DAILY_CLIPS = 10;              // natural-voice clips per subscriber per day (roughly 8 minutes of speech)
+const DAILY_CLIPS = 40;              // natural-voice clips per subscriber per day (short clips, roughly 8 to 10 minutes of speech)
 const SAME_NETWORK_MULTIPLIER = 4;   // safety cap per internet connection
 const VOICE = "Algieba";             // other voices to try: Sulafat, Charon, Achird, Gacrux, Orus
 const MODELS = ["gemini-3.8-flash-tts", "gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts"];
@@ -37,7 +38,7 @@ async function useQuota(uid, ip, limit) {
 }
 
 async function tts(text) {
-  const prompt = `Say in a calm, warm, gentle, caring voice, slowly, like a kind pastor speaking quietly to one person: ${text}`;
+  const prompt = text;   // plain text only, so the voice never reads instructions aloud
   let last = 0;
   for (const model of MODELS) {
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
@@ -73,9 +74,17 @@ export default async (req, context) => {
   if (!text) return json({ message: "Nothing to read." }, 400);
 
   try {
+    // Clips we've already made are replayed instantly and don't count against the daily limit.
+    const cache = getStore("voice-cache");
+    const key = createHash("sha256").update(VOICE + "|" + text).digest("hex");
+    const hit = await cache.get(key, { type: "json" });
+    if (hit) return json(hit);
+
     const quota = await useQuota(uid, context.ip || "unknown", DAILY_CLIPS);
     if (!quota.ok) return json({ message: "You've used today's natural voice. Using your device voice instead." }, 429);
-    return json(await tts(text));
+    const result = await tts(text);
+    if (text.length <= 400) await cache.set(key, JSON.stringify(result));
+    return json(result);
   } catch (e) {
     console.error(e);
     return json({ message: "The natural voice isn't available right now. Using your device voice instead." }, e.message === "busy" ? 503 : 500);
