@@ -425,6 +425,7 @@ function pickVoice(){
   return vs.sort((a, b) => score(b) - score(a))[0] || null;
 }
 const SILENT = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+const READ_SPEED = 1.2;   // 1 = normal speed. Raise it (like 1.3) to read faster
 const player = new Audio();
 let readToken = 0, resolvePlay = null;
 function stopReading(){
@@ -435,9 +436,11 @@ function stopReading(){
   document.querySelectorAll(".ro").forEach(b => { b.textContent = "Read out"; b.dataset.on = ""; });
 }
 function splitText(t){
+  const sents = t.replace(/\s+/g, " ").match(/[^.!?]+[.!?]*\s*/g) || [t];
   const out = []; let cur = "";
-  for (const s of (t.replace(/\s+/g, " ").match(/[^.!?]+[.!?]*\s*/g) || [t])) {
-    if ((cur + s).length > 800 && cur) { out.push(cur.trim()); cur = s; } else cur += s;
+  for (const s of sents) {
+    const limit = out.length === 0 ? 1 : out.length === 1 ? 400 : 800;   // first piece is one sentence, so the voice starts fast
+    if (cur && (cur + s).length > limit) { out.push(cur.trim()); cur = s; } else cur += s;
   }
   if (cur.trim()) out.push(cur.trim());
   return out;
@@ -456,6 +459,7 @@ function playPcm(b64, mime){
     player.onended = () => { resolvePlay = null; URL.revokeObjectURL(url); resolve(); };
     player.onerror = () => { resolvePlay = null; URL.revokeObjectURL(url); reject(new Error("The audio couldn't play. Using your device voice instead.")); };
     player.src = url;
+    player.defaultPlaybackRate = READ_SPEED; player.playbackRate = READ_SPEED;
     player.play().catch(e => { resolvePlay = null; reject(new Error("The audio couldn't play. Using your device voice instead.")); });
   });
 }
@@ -465,7 +469,7 @@ function deviceSpeak(t){
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(t), v = pickVoice();
     if (v) u.voice = v;
-    u.rate = 0.95; u.pitch = 0.95;
+    u.rate = 1.05; u.pitch = 0.95;
     u.onend = u.onerror = () => resolve();
     speechSynthesis.speak(u);
   });
@@ -478,12 +482,14 @@ async function readOut(text, btn){
   player.src = SILENT; player.play().catch(() => {});   // lets iPhone play audio after the tap
   const parts = splitText(text);
   try {
-    let next = callApi({ text: parts[0] }, "/api/speak").catch(e => ({ err: e }));
+    const jobs = [];
+    const start = i => { if (i < parts.length && !jobs[i]) jobs[i] = callApi({ text: parts[i] }, "/api/speak").catch(e => ({ err: e })); };
+    start(0); start(1);
     for (let i = 0; i < parts.length; i++) {
-      const d = await next;
+      const d = await jobs[i];
       if (my !== readToken) return;
       if (d.err) throw d.err;
-      if (i + 1 < parts.length) next = callApi({ text: parts[i + 1] }, "/api/speak").catch(e => ({ err: e }));
+      start(i + 2);
       btn.textContent = "Stop";
       await playPcm(d.audio, d.mime);
       if (my !== readToken) return;
